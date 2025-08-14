@@ -13,6 +13,7 @@ jobs:
     env:
       CI: true
       BASE_URL: https://www.demoblaze.com
+      ARGOS_TOKEN: 'argos_b5e0db181efd7dd7d5cc91f736599e4403'
 
     steps:
       - name: Checkout
