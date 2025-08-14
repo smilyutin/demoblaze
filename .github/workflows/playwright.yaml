@@ -1,51 +1,61 @@
-name: Playwright Tests
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+// playwright.config.ts
+import { defineConfig, devices } from '@playwright/test';
+import * as path from 'path';
+import * as fs from 'fs';
+import { register } from 'tsconfig-paths';
+import dotenv from 'dotenv';
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      CI: true
-      BASE_URL: http://localhost:4200
+// Load environment variables
+dotenv.config();
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+// Register TS path aliases explicitly to avoid CI confusion with --project=chromium.
+try {
+  const tsconfigPath = path.join(__dirname, 'tsconfig.json');
+  const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'));
+  register({
+    baseUrl: path.resolve(__dirname),
+    paths: tsconfig.compilerOptions?.paths ?? {},
+  });
+} catch {
+  // ignore if tsconfig is missing or invalid
+}
 
-      - name: Use Node 20.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
+export default defineConfig({
+  testDir: './tests',
+  timeout: 30_000,
+  expect: { timeout: 5_000 },
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 2 : undefined,
 
-      # Option A (quick fix): ignore lockfile mismatches + peer deps
-      - name: Install dependencies (legacy peer deps)
-        run: npm ci --force
+  reporter: [
+    process.env.CI ? ['dot'] : ['list'],
+    [
+      '@argos-ci/playwright/reporter',
+      {
+        uploadToArgos: !!process.env.CI,
+        token: process.env.ARGOS_TOKEN,
+      },
+    ],
+    ['html', { outputFolder: path.join(__dirname, 'playwright-report'), open: 'never' }],
+    ['github'],
+  ],
 
-      # If you prefer to keep browsers in the cache across runs, you can add:
-      # - uses: actions/cache@v4
-      #   with:
-      #     path: ~/.cache/ms-playwright
-      #     key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-playwright-
+  use: {
+    baseURL: process.env.BASE_URL || 'https://www.demoblaze.com',
+    headless: true,
+    viewport: { width: 1280, height: 800 },
+    actionTimeout: 10_000,
+    navigationTimeout: 15_000,
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps --force
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+  ],
 
-      - name: Run Playwright tests
-        run: npm run auth-sign-login-chrome
-
-      - name: Upload Playwright report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
+  outputDir: path.join(__dirname, 'test-results'),
+});
