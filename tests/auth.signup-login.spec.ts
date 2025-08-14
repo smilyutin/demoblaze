@@ -1,6 +1,7 @@
 import { test } from '../src/fixtures/test-fixtures';
 import { saveCreds } from '@utils/credentials';
 
+
 test.describe('Auth | Signup then Login', () => {
   test('creates a new user, logs in, and saves creds', async ({ home, signupModal, loginModal, navbar }) => {
     const stamp = Date.now().toString(36);
