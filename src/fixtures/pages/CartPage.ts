@@ -1,6 +1,7 @@
 // src/fixtures/pages/CartPage.ts
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { argosScreenshot } from "@argos-ci/playwright";
 
 export class CartPage extends BasePage {
   readonly rows: Locator;
@@ -41,6 +42,8 @@ export class CartPage extends BasePage {
 
   async deleteItem(name: string) {
     const row = this.rowByProduct(name);
+    
+    await argosScreenshot(this.page, "cart page");
     await row.getByRole('link', { name: 'Delete' }).click();
     await expect(row).toHaveCount(0);
   }
