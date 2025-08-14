@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "test": "playwright test --project=chromium",
+    "auth-sign-login-chrome": "npx playwright test auth.signup-login.spec.ts --project=chromium",
     "test:ui": "playwright test --ui",
     "test:smoke": "playwright test tests/smoke.add-to-cart.spec.ts --project=chromium",
     "test:headed": "playwright test --headed --project=chromium",

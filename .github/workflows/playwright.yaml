@@ -26,7 +26,7 @@ jobs:
 
       # Option A (quick fix): ignore lockfile mismatches + peer deps
       - name: Install dependencies (legacy peer deps)
-        run: npm install --legacy-peer-deps
+        run: npm ci --force
 
       # If you prefer to keep browsers in the cache across runs, you can add:
       # - uses: actions/cache@v4
@@ -40,7 +40,7 @@ jobs:
         run: npx playwright install --with-deps --force
 
       - name: Run Playwright tests
-        run: npm run pageObjectsArgos-chrome
+        run: npm run auth-sign-login-chrome
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
