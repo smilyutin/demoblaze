@@ -1,0 +1,21 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+package-lock.json
+
+# Playwright outputs
+playwright-report/
+test-results/
+blob-report/
+traces/
+videos/
+screenshots/
+
+# Env/OS/editor
+.env
+.env.*
+.DS_Store
+.vscode/*
+!.vscode/settings.json
