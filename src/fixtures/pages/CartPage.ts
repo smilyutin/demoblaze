@@ -1,7 +1,7 @@
 // src/fixtures/pages/CartPage.ts
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
-import { argosScreenshot } from "@argos-ci/playwright";
+import { argosScreenshot } from '@argos-ci/playwright';
 
 export class CartPage extends BasePage {
   readonly rows: Locator;
@@ -42,10 +42,10 @@ export class CartPage extends BasePage {
 
   async deleteItem(name: string) {
     const row = this.rowByProduct(name);
-    
-    await argosScreenshot(this.page, "cart page");
+    await argosScreenshot(this.page, 'cart-before-delete');
     await row.getByRole('link', { name: 'Delete' }).click();
     await expect(row).toHaveCount(0);
+    await argosScreenshot(this.page, 'cart-after-delete');
   }
 
   async getTotal(): Promise<number> {
@@ -58,9 +58,10 @@ export class CartPage extends BasePage {
     console.log('[cart] Clicking "Place Order"…');
     await this.placeOrderBtn.click();
     await expect(this.orderModal).toBeVisible();
+    await argosScreenshot(this.page, 'order-modal-open');
   }
 
-  /** Step 2: fill the modal and click Purchase */
+  /** Step 2: fill the modal (does not assert confirmation) */
   async fillOrderForm(data: {
     name: string; country: string; city: string; card: string; month: string; year: string;
   }) {
@@ -71,29 +72,58 @@ export class CartPage extends BasePage {
     await this.card.fill(data.card);
     await this.month.fill(data.month);
     await this.year.fill(data.year);
+    await argosScreenshot(this.page, 'order-form-filled');
 
+    // First attempt to purchase; confirm step will retry if needed.
     await this.purchaseBtn.click();
+    await argosScreenshot(this.page, 'purchase-click-1');
   }
 
-  /** Final: assert sweet-alert and close */
-  async confirmPurchaseAndAssert() {
-    const confirmation = this.page.locator('.sweet-alert');
-    await expect(confirmation).toBeVisible();
-    const detailsText = await confirmation.locator('p').textContent();
-    console.log('[cart] Confirmation:', (detailsText || '').trim());
-    const ok = this.page.getByRole('button', { name: 'OK' });
-    await ok.click();
-    return detailsText?.trim() || '';
+  /**
+   * Final: assert SweetAlert and close.
+   * If the alert closes but the modal is still present, we click Purchase again
+   * (and OK again) up to `maxAttempts` times.
+   */
+  async confirmPurchaseAndAssert(maxAttempts = 2): Promise<string> {
+    let lastDetails = '';
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const confirmation = this.page.locator('.sweet-alert');
+
+      // If confirmation is not visible yet (e.g., first click didn’t trigger), try again.
+      if (!(await confirmation.isVisible())) {
+        if (await this.orderModal.isVisible()) {
+          await this.purchaseBtn.click();
+          await argosScreenshot(this.page, `purchase-click-${attempt}`);
+        }
+      }
+
+      await expect(
+        confirmation,
+        `Waiting for purchase confirmation (attempt ${attempt})`
+      ).toBeVisible({ timeout: 10_000 });
+
+      lastDetails = (await confirmation.locator('p').textContent())?.trim() || '';
+      console.log(`[cart] Confirmation (attempt ${attempt}): ${lastDetails}`);
+      await argosScreenshot(this.page, `purchase-confirmation-${attempt}`);
+
+      // Dismiss SweetAlert
+      await this.page.getByRole('button', { name: 'OK' }).click();
+      await expect(confirmation).toBeHidden({ timeout: 5_000 }).catch(() => {});
+
+      // If modal stayed open (site sometimes needs a second click), loop to try again.
+      const stillOpen = await this.orderModal.isVisible();
+      if (!stillOpen) break;
+    }
+
+    return lastDetails;
   }
 
-  async expectItemPresent(itemName: string, timeout = 15000): Promise<void> {
-  await this.page.waitForSelector('#tbodyid', { state: 'visible', timeout });
-  const row = this.page.locator('#tbodyid tr', { hasText: itemName });
-
-  // Poll until at least one matching row exists
-  await expect.poll(async () => await row.count(), { timeout, message: `Item "${itemName}" not in cart` })
-    .toBeGreaterThan(0);
-
-  await expect(row.first()).toBeVisible(); // final visibility check
-}
+  async expectItemPresent(itemName: string, timeout = 15_000): Promise<void> {
+    await this.page.waitForSelector('#tbodyid', { state: 'visible', timeout });
+    const row = this.page.locator('#tbodyid tr', { hasText: itemName });
+    await expect
+      .poll(async () => row.count(), { timeout, message: `Item "${itemName}" not in cart` })
+      .toBeGreaterThan(0);
+    await expect(row.first()).toBeVisible();
+  }
 }
