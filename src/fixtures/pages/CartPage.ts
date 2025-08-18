@@ -18,6 +18,9 @@ export class CartPage extends BasePage {
   readonly year: Locator;
   readonly purchaseBtn: Locator;
 
+  // --- NEW: guard to prevent multiple clicks ---
+  private purchaseClicks = 0; // NEW
+
   constructor(page: Page) {
     super(page);
     this.rows = page.locator('#tbodyid > tr');
@@ -32,6 +35,7 @@ export class CartPage extends BasePage {
     this.month = page.locator('#month');
     this.year = page.locator('#year');
     this.purchaseBtn = page.getByRole('button', { name: 'Purchase' });
+    
   }
 
   async open() { await this.goto('/cart.html'); }
@@ -59,6 +63,9 @@ export class CartPage extends BasePage {
     await this.placeOrderBtn.click();
     await expect(this.orderModal).toBeVisible();
     await argosScreenshot(this.page, 'order-modal-open');
+
+    // NEW: reset guard for each fresh order flow
+    this.purchaseClicks = 0; // NEW
   }
 
   /** Step 2: fill the modal (does not assert confirmation) */
@@ -75,8 +82,11 @@ export class CartPage extends BasePage {
     await argosScreenshot(this.page, 'order-form-filled');
 
     // First attempt to purchase; confirm step will retry if needed.
-    await this.purchaseBtn.click();
-    await argosScreenshot(this.page, 'purchase-click-1');
+    if (this.purchaseClicks === 0) {           // NEW (guard)
+      await this.purchaseBtn.click();
+      this.purchaseClicks++;                   // NEW (record click)
+      await argosScreenshot(this.page, 'purchase-click-1');
+    }
   }
 
   /**
@@ -92,15 +102,19 @@ export class CartPage extends BasePage {
       // If confirmation is not visible yet (e.g., first click didn’t trigger), try again.
       if (!(await confirmation.isVisible())) {
         if (await this.orderModal.isVisible()) {
-          await this.purchaseBtn.click();
-          await argosScreenshot(this.page, `purchase-click-${attempt}`);
+          // NEW: prevent a second submission if we've already clicked once
+         // if (this.purchaseClicks === 0) {     // NEW
+            await this.purchaseBtn.click();
+            //this.purchaseClicks++;             // NEW
+            await argosScreenshot(this.page, `purchase-click-${attempt}`);
+         // }
         }
       }
 
       await expect(
         confirmation,
         `Waiting for purchase confirmation (attempt ${attempt})`
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible({ timeout: 5_000 });
 
       lastDetails = (await confirmation.locator('p').textContent())?.trim() || '';
       console.log(`[cart] Confirmation (attempt ${attempt}): ${lastDetails}`);
@@ -110,12 +124,18 @@ export class CartPage extends BasePage {
       await this.page.getByRole('button', { name: 'OK' }).click();
       await expect(confirmation).toBeHidden({ timeout: 5_000 }).catch(() => {});
 
-      // If modal stayed open (site sometimes needs a second click), loop to try again.
-      const stillOpen = await this.orderModal.isVisible();
-      if (!stillOpen) break;
-    }
+//  Click the *footer* Close (has visible text "Close"), not the header "×"
+const footerClose = this.orderModal
+  .getByRole('button', { name: 'Close' })
+  .filter({ hasText: 'Close' });
 
-    return lastDetails;
+if (await footerClose.isVisible()) {
+  await footerClose.click();
+}
+      return lastDetails;
+    }
+return lastDetails;
+    
   }
 
   async expectItemPresent(itemName: string, timeout = 15_000): Promise<void> {
