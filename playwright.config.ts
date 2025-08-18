@@ -56,6 +56,4 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
-
-  outputDir: path.join(__dirname, 'test-results'),
 });
